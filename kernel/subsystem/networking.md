@@ -107,22 +107,6 @@ Once an SKB is passed to another subsystem (queued, enqueued, handed to a
 protocol handler), the caller loses ownership. The receiver may free it at
 any time, including before the handoff function returns.
 
-## Byte Order Conversions
-
-Byte order mismatches cause silent data corruption -- packets are
-misrouted, ports are mismatched, and protocol fields are misinterpreted.
-
-Network protocols use big-endian byte order. The kernel uses `__be16`,
-`__be32`, and `__be64` types (defined in `include/uapi/linux/types.h`)
-to annotate network-order values. Common byte order bugs:
-
-- Comparing a `__be16` port with a host-order constant without `htons()`
-- Performing arithmetic on network-order values without converting first
-- Double-converting (applying `htons()` to an already network-order value)
-
-Sparse catches these at build time via `__bitwise` type annotations
-(active when `__CHECKER__` is defined; run with `make C=1`).
-
 ## RCU Protection for Routing
 
 Accessing a dst entry outside its RCU read-side critical section causes
