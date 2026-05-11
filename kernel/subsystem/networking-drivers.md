@@ -1,5 +1,51 @@
 # Networking Drivers: Stats, and Synchronization
 
+## Per-Device Statistics with u64_stats_sync
+
+Driver pre-NAPI/per-queue/per-CPU statistics that count packets and bytes
+use 64-bit counters that can tear on 32-bit architectures (a reader observes
+the low half of one update combined with the high half of the next).
+The `u64_stats_sync` helpers in `include/linux/u64_stats_sync.h` close that
+race using a seqcount on 32-bit and compile to no-ops on 64-bit.
+
+A counter is declared as `u64_stats_t` or pure u64 (paired with one `struct
+u64_stats_sync` per per-CPU container, initialized via `u64_stats_init()`).
+Writers wrap updates in `u64_stats_update_begin()` /
+`u64_stats_update_end()`; readers retry around `u64_stats_fetch_begin()` /
+`u64_stats_fetch_retry()`.
+
+```c
+/* writer (per-CPU, BH-disabled or otherwise serialized) */
+u64_stats_update_begin(&stats->syncp);
+u64_stats_add(&stats->bytes, len);
+u64_stats_inc(&stats->packets);
+u64_stats_update_end(&stats->syncp);
+
+/* reader (e.g., ndo_get_stats64) */
+do {
+    start = u64_stats_fetch_begin(&stats->syncp);
+    bytes = u64_stats_read(&stats->bytes);
+    pkts  = u64_stats_read(&stats->packets);
+} while (u64_stats_fetch_retry(&stats->syncp, start));
+```
+
+Constraints that are easy to get wrong:
+
+- **Writers must be mutually exclusive** for a given `syncp`. Per-CPU
+  or per-NAPI stats satisfy this because each CPU writes its own copy
+  from a non-preemptible context (NAPI, softirq).
+- **Writers must run with preemption disabled.** Per-CPU + BH-disabled (or
+  hardirq) context already provides this. If a writer can be preempted by a
+  reader, the reader spins forever on 32-bit.
+- **Use the `_irqsave` variant when an IRQ handler may also write the same
+  `syncp`, or read it.** `u64_stats_update_begin_irqsave()` /
+  `u64_stats_update_end_irqrestore()` are no-ops with respect to interrupts
+  on 64-bit but disable interrupts on 32-bit.
+- Readers may sleep or be preempted; they perform pure reads.
+- Reader retry loops must be idempotent on retry, common mistake is to
+  use `+=` e.g. `retval->rx_bytes += u64_stats_read(&stats->bytes)`
+  which will add the byte counter multiple times in case on retry.
+
 ## Ethtool Driver Statistics vs Standard Stats
 
 Adding statistics to `ethtool -S` that duplicate counters for which a
@@ -99,5 +145,6 @@ to prevent concurrent access, instead of using a proper lock or RCU.
 
 ## Quick Checks
 
+- **u64_stats_sync writers**: must be mutually exclusive per `syncp` and run with preemption disabled; use the `_irqsave` variant when IRQ context also touches the same `syncp`
 - **Ethtool -S stat duplication**: check whether any new `ethtool -S` counters cover values for which a standard uAPI exists (rtnl_link_stats64, page pool stats, per-queue stats via netlink), regardless of whether the driver currently uses that standard interface
 - **Flags used as locks**: flag/atomic/bit set-on-entry clear-on-exit patterns that guard code sections are ad-hoc locks; use real locks or RCU instead
