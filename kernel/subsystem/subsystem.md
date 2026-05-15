@@ -72,9 +72,14 @@ regexes
 | Objtool | tools/objtool/, INSN_BUG, INSN_TRAP, decode.c | objtool.md |
 | KHO (Kexec Handover) | lib/test_kho.c, kho_, kho_is_enabled, kho_retrieve_subtree, kho_preserve_folio, kho_add_subtree, register_kho_notifier | kho.md |
 | Rust | any Rust code | rust.md |
+| x86 / tip-tree | arch/x86/, x86@kernel.org, sched/, locking/, irq/, timers/, perf/, ras/, efi/, core/rcu | x86-tip.md |
+| tip changelog | any patch loading x86-tip.md | tip-changelog.md |
+| tip code style | any patch loading x86-tip.md | tip-code-style.md |
+| TDX / coco | arch/x86/virt/vmx/tdx/, arch/x86/coco/, drivers/virt/coco/, SEAMCALL, SEAMLDR, TDH_, TDG_, tdx_, coco/, linux-coco | tdx-review.md |
 
 ## Optional Patterns
 
 Load only when explicitly requested in the prompt:
 
 - **Subjective Review** (subjective-review.md): Subjective general assessment
+- **tip Citations** (tip-citations.md): lore message-id index for SR-DH-* rules in x86-tip.md / tip-changelog.md / tip-code-style.md / tdx-review.md
